@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>html css viewer</title>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #1e1e1e;
+    }
+
+    .editor-panel {
+      height: 50%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tabs {
+      display: flex;
+      background: #252526;
+      border-bottom: 1px solid #3e3e42;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      background: #2d2d2d;
+      color: #cccccc;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      border-right: 1px solid #3e3e42;
+    }
+
+    .tab.active { background: #1e1e1e; color: #ffffff; }
+
+    .editor-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .editor-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+
+    .editor-container.active { display: flex; }
+
+    .line-numbers {
+      width: 50px;
+      background: #1e1e1e;
+      color: #858585;
+      padding: 16px 8px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      text-align: right;
+      border-right: 1px solid #3e3e42;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .code-area {
+      flex: 1;
+      position: relative;
+    }
+
+    textarea, .highlight-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 16px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      tab-size: 2;
+      border: none;
+      resize: none;
+      outline: none;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    textarea {
+      background: transparent;
+      color: transparent;
+      caret-color: #ffffff;
+      z-index: 2;
+    }
+
+    .highlight-layer {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .divider {
+      height: 12px;
+      background: #2d2d2d;
+      cursor: row-resize;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-top: 2px solid #3e3e42;
+      border-bottom: 2px solid #3e3e42;
+    }
+
+    .divider::after {
+      content: '';
+      width: 60px;
+      height: 4px;
+      background: #666;
+      border-radius: 2px;
+    }
+
+    .divider:hover { background: #007acc; }
+
+    .preview-panel {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: white;
+    }
+
+    .hl-tag { color: #569cd6; }
+    .hl-attr { color: #9cdcfe; }
+    .hl-value { color: #ce9178; }
+    .hl-comment { color: #6a9955; font-style: italic; }
+    .hl-doctype { color: #808080; font-style: italic; }
+    .hl-string { color: #ce9178; }
+    .hl-equals { color: #d4d4d4; }
+    .hl-bracket { color: #808080; }
+    .hl-css-selector { color: #d7ba7d; }
+    .hl-css-property { color: #9cdcfe; }
+    .hl-css-value { color: #ce9178; }
+    .hl-css-punctuation { color: #d4d4d4; }
+  </style>
+</head>
+<body>
+  <div class="editor-panel" id="editorPanel">
+    <div class="tabs">
+      <button class="tab active" data-tab="html" onclick="switchTab('html')">HTML</button>
+      <button class="tab" data-tab="css" onclick="switchTab('css')">CSS</button>
+    </div>
+    <div class="editor-wrapper">
+      <div class="editor-container active" id="htmlEditor">
+        <div class="line-numbers" id="htmlLineNumbers"></div>
+        <div class="code-area">
+          <textarea id="htmlInput" placeholder="Paste HTML here" spellcheck="false" oninput="updateAll()" onscroll="syncScroll('html')"></textarea>
+          <div class="highlight-layer" id="htmlHighlight"></div>
+        </div>
+      </div>
+      <div class="editor-container" id="cssEditor">
+        <div class="line-numbers" id="cssLineNumbers"></div>
+        <div class="code-area">
+          <textarea id="cssInput" placeholder="Paste CSS here" spellcheck="false" oninput="updateAll()" onscroll="syncScroll('css')"></textarea>
+          <div class="highlight-layer" id="cssHighlight"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider" id="divider" onmousedown="startResize(event)" ontouchstart="startResize(event)"></div>
+
+  <div class="preview-panel" id="previewPanel">
+    <iframe id="previewFrame"></iframe>
+  </div>
+
+  <script>
+    var isResizing = false;
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(function(t) {
+        t.classList.remove('active');
+      });
+      document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+      
+      document.querySelectorAll('.editor-container').forEach(function(c) {
+        c.classList.remove('active');
+      });
+      document.getElementById(tabName + 'Editor').classList.add('active');
+    }
+
+    function updateLineNumbers(id) {
+      var textarea = document.getElementById(id + 'Input');
+      var lineNumbers = document.getElementById(id + 'LineNumbers');
+      var lines = textarea.value.split('\n');
+      var numbers = '';
+      for (var i = 1; i <= lines.length; i++) {
+        numbers += i + '\n';
+      }
+      lineNumbers.textContent = numbers;
+    }
+
+    function syntaxHighlightHTML(html) {
+      var escaped = html
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      escaped = escaped.replace(
+        /(&lt;!--[\s\S]*?--&gt;)/g,
+        '<span class="hl-comment">$1</span>'
+      );
+
+      escaped = escaped.replace(
+        /(&lt;!DOCTYPE[\s\S]*?&gt;)/gi,
+        '<span class="hl-doctype">$1</span>'
+      );
+
+      escaped = escaped.replace(
+        /(&lt;\/?)([\w-]+)((?:\s+[\w-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*)(\/?&gt;)/g,
+        function(match, openBracket, tagName, attributes, closeBracket) {
+          var result = '<span class="hl-bracket">' + openBracket + '</span>';
+          result += '<span class="hl-tag">' + tagName + '</span>';
+          
+          if (attributes) {
+            result += attributes.replace(
+              /([\w-]+)(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))?/g,
+              function(attrMatch, attrName, equals, doubleQuoted, singleQuoted, unquoted) {
+                var attrResult = '<span class="hl-attr">' + attrName + '</span>';
+                attrResult += '<span class="hl-equals">' + equals + '</span>';
+                var value = doubleQuoted || singleQuoted || unquoted || '';
+                if (value) {
+                  var quoteChar = doubleQuoted ? '"' : (singleQuoted ? "'" : '');
+                  attrResult += '<span class="hl-value">' + quoteChar + value + quoteChar + '</span>';
+                }
+                return attrResult;
+              }
+            );
+          }
+          
+          result += '<span class="hl-bracket">' + closeBracket + '</span>';
+          return result;
+        }
+      );
+
+      return escaped;
+    }
+
+    function syntaxHighlightCSS(css) {
+      var escaped = css
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      escaped = escaped.replace(
+        /(\/\*[\s\S]*?\*\/)/g,
+        '<span class="hl-comment">$1</span>'
+      );
+
+      escaped = escaped.replace(
+        /([^{\n]+)(\s*\{)/g,
+        '<span class="hl-css-selector">$1</span><span class="hl-css-punctuation">$2</span>'
+      );
+
+      escaped = escaped.replace(
+        /([\w-]+)(\s*:)/g,
+        '<span class="hl-css-property">$1</span><span class="hl-css-punctuation">$2</span>'
+      );
+
+      escaped = escaped.replace(
+        /:\s*([^;{}]+)/g,
+        ': <span class="hl-css-value">$1</span>'
+      );
+
+      escaped = escaped.replace(
+        /([{};])/g,
+        '<span class="hl-css-punctuation">$1</span>'
+      );
+
+      return escaped;
+    }
+
+    function updateAll() {
+      updateLineNumbers('html');
+      updateLineNumbers('css');
+      
+      var htmlInput = document.getElementById('htmlInput');
+      var htmlHighlight = document.getElementById('htmlHighlight');
+      htmlHighlight.innerHTML = syntaxHighlightHTML(htmlInput.value);
+      
+      var cssInput = document.getElementById('cssInput');
+      var cssHighlight = document.getElementById('cssHighlight');
+      cssHighlight.innerHTML = syntaxHighlightCSS(cssInput.value);
+      
+      updatePreview();
+    }
+
+    function syncScroll(type) {
+      var textarea = document.getElementById(type + 'Input');
+      var highlight = document.getElementById(type + 'Highlight');
+      var lineNumbers = document.getElementById(type + 'LineNumbers');
+      highlight.scrollTop = textarea.scrollTop;
+      highlight.scrollLeft = textarea.scrollLeft;
+      lineNumbers.scrollTop = textarea.scrollTop;
+    }
+
+    function updatePreview() {
+      var html = document.getElementById('htmlInput').value;
+      var css = document.getElementById('cssInput').value;
+      var frame = document.getElementById('previewFrame');
+      var doc = frame.contentDocument || frame.contentWindow.document;
+      doc.open();
+      doc.write('<!DOCTYPE html><html><head><style>' + css + '<' + '/style></head><body>' + html + '<' + '/body></html>');
+      doc.close();
+    }
+
+    function startResize(e) {
+      isResizing = true;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'row-resize';
+      e.preventDefault();
+    }
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isResizing) return;
+      var containerHeight = document.body.offsetHeight;
+      var newEditorHeight = (e.clientY / containerHeight) * 100;
+      if (newEditorHeight > 15 && newEditorHeight < 85) {
+        document.getElementById('editorPanel').style.height = newEditorHeight + '%';
+        document.getElementById('previewPanel').style.height = (100 - newEditorHeight) + '%';
+      }
+    });
+
+    document.addEventListener('touchmove', function(e) {
+      if (!isResizing) return;
+      var containerHeight = document.body.offsetHeight;
+      var newEditorHeight = (e.touches[0].clientY / containerHeight) * 100;
+      if (newEditorHeight > 15 && newEditorHeight < 85) {
+        document.getElementById('editorPanel').style.height = newEditorHeight + '%';
+        document.getElementById('previewPanel').style.height = (100 - newEditorHeight) + '%';
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('mouseup', function() {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      }
+    });
+
+    document.addEventListener('touchend', function() {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      }
+    });
+
+    document.getElementById('htmlInput').value = '<h1>Hello World</h1>\n<p>This is a paragraph</p>\n<div class="container">\n  <span>Some text</span>\n</div>';
+    document.getElementById('cssInput').value = 'body {\n  font-family: Arial, sans-serif;\n  padding: 20px;\n  background: #f0f0f0;\n}\n\nh1 {\n  color: #333;\n  font-size: 24px;\n}\n\n.container {\n  border: 1px solid #ddd;\n  padding: 10px;\n}';
+
+    updateAll();
+  </script>
+</body>
+</html>
