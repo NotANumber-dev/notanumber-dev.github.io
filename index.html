@@ -1,7 +1,62 @@
 <!DOCTYPE html>
-//why iframe? because i use cloudflare pages to host and dont want to redo everything on github.
-<html>
+<html lang="en">
 <head>
-<meta http-equiv="refresh" content="0; url=https://nan-dev.pages.dev">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>NaN</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #020202;
+        }
+        .full-frame {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            background: #020202;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
 </head>
+<body>
+    <iframe id="mainFrame" class="full-frame" title="Full-page content" src="https://nan-dev.pages.dev" loading="eager" allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    <script>
+        (function() {
+            const frame = document.getElementById('mainFrame');
+            const url = 'https://nan-dev.pages.dev';
+            let multiredirect = false;
+            let timeout = null;
+
+            function redirect() {
+                if (multiredirect) return;
+                multiredirect = true;
+                if (timeout) clearTimeout(timeout);
+                window.location.replace(url);
+            }
+
+            if (frame) {
+                timeout = setTimeout(redirect, 8000);
+                frame.addEventListener('load', function onLoad() {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+                });
+                frame.addEventListener('error', redirect);
+            }
+        })();
+    </script>
+</body>
 </html>
