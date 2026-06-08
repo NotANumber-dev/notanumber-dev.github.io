@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>en construction</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: #0a0a0c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+        }
+
+        :root {
+            --ai-bg-page: #0a0a0c;
+            --ai-accent-glow: rgba(255, 138, 61, 0.4);
+            --ai-accent: #ff8a3d;
+            --ai-gradient-conic: conic-gradient(
+                from 0deg,
+                #ff8a3d 0%,
+                #ff6b9b 25%,
+                #b95cf0 50%,
+                #5e9eff 75%,
+                #ff8a3d 100%
+            );
+        }
+
+        #aiHeroLogoWrap {
+            position: relative;
+            width: 128px;
+            height: 128px;
+            margin: 0 auto;
+            animation: aiHeroFloat 5s ease-in-out infinite;
+        }
+
+        @keyframes aiHeroFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        #aiHeroGlow {
+            position: absolute;
+            inset: -30px;
+            border-radius: 50%;
+            background: var(--ai-gradient-conic);
+            filter: blur(40px);
+            opacity: 0.35;
+            animation: aiRingSpin 8s linear infinite;
+        }
+
+        #aiHeroRing {
+            position: absolute;
+            inset: -8px;
+            border-radius: 50%;
+            overflow: hidden;
+            opacity: 0.85;
+        }
+
+        #aiHeroRing::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200%;
+            aspect-ratio: 1;
+            transform: translate(-50%, -50%);
+            background: var(--ai-gradient-conic);
+            animation: aiRingSpin 8s linear infinite;
+        }
+
+        #aiHeroRing::after {
+            content: "";
+            position: absolute;
+            inset: 4px;
+            border-radius: 50%;
+            background: var(--ai-bg-page);
+            transition: background 0.5s ease;
+        }
+
+        @keyframes aiRingSpin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        #aiHeroLogo {
+            position: absolute;
+            inset: 12px;
+            width: calc(100% - 24px);
+            height: calc(100% - 24px);
+            object-fit: contain;
+            z-index: 2;
+            animation: aiHeroBreath 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 24px var(--ai-accent-glow));
+        }
+
+        @keyframes aiHeroBreath {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+        .logo-label {
+            text-align: center;
+            margin-top: 32px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: -0.2px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <div id="aiHeroLogoWrap">
+            <div id="aiHeroGlow"></div>
+            <div id="aiHeroRing"></div>
+            <img 
+                id="aiHeroLogo" 
+                src="https://ios27beta.com/wp-content/uploads/2025/11/apple_intelligence-logo_brandlogos.net_zmypw-512x504-1.png" 
+                alt="Apple Intelligence"
+            >
+        </div>
+      <div class="logo-label">Page en construction</div>
+    </div>
+</body>
+</html>
