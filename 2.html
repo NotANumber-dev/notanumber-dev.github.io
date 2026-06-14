@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liquid Glass</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html,
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    }
+    #glcanvas {
+      position: fixed;
+      inset: 0;
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #card {
+      position: absolute;
+      width: 350px;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #card.dragging {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="glcanvas"></canvas>
+  <div id="card"> </div> //text here
+
+  <script id="fragShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 reso;
+    uniform vec2 res;
+    uniform vec2 pos;
+    uniform vec2 box;
+    uniform sampler2D bgimg;
+
+    vec2 covuv(vec2 uv) {
+      float ca = reso.x / reso.y;
+      float ia = res.x / res.y;
+      vec2 s = ca > ia ? vec2(1.0, ia / ca) : vec2(ca / ia, 1.0);
+      return (uv - 0.5) * s + 0.5;
+    }
+
+    void main() {
+      const float POWER_EXPONENT = 6.0;
+      vec2 pixelc = gl_FragCoord.xy;
+      vec2 uv = pixelc / reso.xy;
+
+      vec2 d = (pixelc - pos) / box;
+      float rndbox = pow(abs(d.x), POWER_EXPONENT) + pow(abs(d.y), POWER_EXPONENT);
+
+      float rb1 = clamp((1.0 - rndbox) * 8.0, 0.0, 1.0);
+      float rb2 = clamp((0.955 - rndbox * 0.95) * 16.0, 0.0, 1.0) -
+                  clamp((0.91  - rndbox * 0.95) * 16.0, 0.0, 1.0);
+      float rb3 = clamp((1.5 - rndbox * 1.1) * 2.0, 0.0, 1.0) -
+                  clamp((1.0 - rndbox * 1.1) * 2.0, 0.0, 1.0);
+
+      vec4 bg = texture2D(bgimg, covuv(uv));
+      float transition = smoothstep(0.0, 1.0, rb1 + rb2);
+      vec4 color = bg;
+
+      if (transition > 0.0) {
+        vec2 cuv = pos / reso.xy;
+        
+        float baseRefract = 1.0 - rndbox * 0.22;
+        float edgeMask = smoothstep(0.6, 1.0, rndbox); 
+        float fringeStrength = 0.04 * edgeMask; 
+
+        vec2 lensR = cuv + (uv - cuv) * (baseRefract - fringeStrength);
+        vec2 lensG = cuv + (uv - cuv) * baseRefract;
+        vec2 lensB = cuv + (uv - cuv) * (baseRefract + fringeStrength);
+
+        vec3 acc = vec3(0.0);
+        float total = 0.0;
+        
+        for (float x = -3.0; x <= 3.0; x++) {
+          for (float y = -3.0; y <= 3.0; y++) {
+            vec2 off = vec2(x, y) * 0.015 / reso.xy;
+            
+            float rChan = texture2D(bgimg, covuv(lensR + off)).r;
+            float gChan = texture2D(bgimg, covuv(lensG + off)).g;
+            float bChan = texture2D(bgimg, covuv(lensB + off)).b;
+            
+            acc += vec3(rChan, gChan, bChan);
+            total += 1.0;
+          }
+        }
+        acc /= total;
+
+        float dy = uv.y - cuv.y;
+        float gradient = clamp((clamp(dy, 0.0, 0.2) + 0.1) / 2.0, 0.0, 1.0) +
+                         clamp((clamp(-dy, -1000.0, 0.2) * rb3 + 0.1) / 2.0, 0.0, 1.0);
+        
+        vec4 lighting = clamp(vec4(acc, 1.0) + vec4(rb1) * gradient + vec4(rb2) * 0.3, 0.0, 1.0);
+        color = mix(bg, lighting, transition);
+      }
+      gl_FragColor = vec4(color.rgb, 1.0);
+    }
+  </script>
+
+  <script>
+    const canvas = document.getElementById("glcanvas");
+    const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
+    const card = document.getElementById("card");
+
+    function cavassz() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    cavassz();
+
+    const vsSource = `attribute vec2 position; void main(){ gl_Position = vec4(position, 0.0, 1.0); }`;
+    const fsSource = document.getElementById("fragShader").textContent;
+
+    function shader1(type, source) {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, source);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.error("Shader error:", gl.getShaderInfoLog(sh));
+        gl.deleteShader(sh);
+        return null;
+      }
+      return sh;
+    }
+    
+    const program = gl.createProgram();
+    gl.attachShader(program, shader1(gl.VERTEX_SHADER, vsSource));
+    gl.attachShader(program, shader1(gl.FRAGMENT_SHADER, fsSource));
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    
+    const positionLoc = gl.getAttribLocation(program, "position");
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+    const U = {
+      resolution: gl.getUniformLocation(program, "reso"),
+      imgRes: gl.getUniformLocation(program, "res"),
+      cardPos: gl.getUniformLocation(program, "pos"),
+      cardHalf: gl.getUniformLocation(program, "box"),
+      texture: gl.getUniformLocation(program, "bgimg"),
+    };
+
+    const texture = gl.createTexture();
+    let imgW = 1920, imgH = 1080;
+
+    function uptxt(imageElement) {
+      imgW = imageElement.naturalWidth;
+      imgH = imageElement.naturalHeight;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageElement);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => uptxt(img);
+    img.src = "https://picsum.photos/1920/1080";
+
+    function center() {
+      card.style.left = Math.max(8, (window.innerWidth - card.offsetWidth) / 2) + "px";
+      card.style.top = Math.max(16, (window.innerHeight - card.offsetHeight) / 2) + "px";
+    }
+
+    let drag = null;
+    card.addEventListener("pointerdown", (e) => {
+      drag = { dx: e.clientX - card.offsetLeft, dy: e.clientY - card.offsetTop };
+      card.setPointerCapture(e.pointerId);
+      card.classList.add("dragging");
+    });
+    
+    card.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const w = card.offsetWidth, h = card.offsetHeight;
+      let nx = Math.min(Math.max(e.clientX - drag.dx, 8), window.innerWidth - w - 8);
+      let ny = Math.min(Math.max(e.clientY - drag.dy, 8), window.innerHeight - h - 8);
+      card.style.left = nx + "px";
+      card.style.top = ny + "px";
+    });
+    
+    card.addEventListener("pointerup", () => {
+      drag = null;
+      card.classList.remove("dragging");
+    });
+
+    function render() {
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = canvas.height - (rect.top + rect.height / 2);
+
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform2f(U.resolution, canvas.width, canvas.height);
+      gl.uniform2f(U.imgRes, imgW, imgH);
+      gl.uniform2f(U.cardPos, cx, cy);
+      gl.uniform2f(U.cardHalf, rect.width / 2 + 4, rect.height / 2 + 4);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.uniform1i(U.texture, 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener("resize", () => {
+      cavassz();
+      const w = card.offsetWidth, h = card.offsetHeight;
+      card.style.left = Math.min(Math.max(card.offsetLeft, 8), Math.max(8, window.innerWidth - w - 8)) + "px";
+      card.style.top = Math.min(Math.max(card.offsetTop, 8), Math.max(8, window.innerHeight - h - 8)) + "px";
+    });
+
+    center();
+    render();
+  </script>
+</body>
+</html>
